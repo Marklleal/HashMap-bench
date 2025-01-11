@@ -1,0 +1,12 @@
+[book]
+authors = ["mkll"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Research about HashMaps and benchmarks"
+
+[output.html.playground]
+editable = true
+
+[output.html]
+playground-url = ["https://play.rust-lang.org/"]
