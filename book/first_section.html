@@ -153,6 +153,154 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="performance-analysis-of-hashmap-accesses-in-loops"><a class="header" href="#performance-analysis-of-hashmap-accesses-in-loops">Performance Analysis of HashMap Accesses in Loops</a></h1>
+<h2 id="why-am-i-conducting-this-research"><a class="header" href="#why-am-i-conducting-this-research">Why am I conducting this research?</a></h2>
+<p>While reading about <a href="https://rust-book.cs.brown.edu/ch08-03-hash-maps.html#updating-a-value-based-on-the-old-value">"<em>updating a value based on the old value</em>"</a> in the <strong>official rust book</strong>, I came across a <em>for loop</em> that made me question why the author used a <em>variable</em> to get the <em>mutable value</em> from the <strong>HashMap</strong> <em>or_insert()</em> method instead of directly derefence it.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">fn main() {
+</span><span class="boring">  use std::collections::HashMap;
+</span><span class="boring">
+</span><span class="boring">  let text = "hello world wonderful world";
+</span><span class="boring">  let mut map: HashMap&lt;&amp;str, i32&gt; = HashMap::new();
+</span><span class="boring">
+</span>  for word in text.split_whitespace() {
+    let count = map.entry(word).or_insert(0);
+    *count += 1;
+  }
+<span class="boring">
+</span><span class="boring">    println!("{map:?}");
+</span><span class="boring">}</span></code></pre></pre>
+<p>Couldn't we use the <em>get</em> method with an <em>if let</em> and have the same final result? Or something more reliable and with better clarity, like getting <em>frequency_map</em> value by index, removing the nesting of "if's".
+This intrigued me, so I decided to experiment by avoiding the inner variable <em>count</em>. I thought that since the count variable is created in every iteration of the for loop, avoiding it could reduce the time and improve the performance, right?
+Let's change the code above to be like what I've said so far:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">fn main() {
+</span><span class="boring">  use std::collections::HashMap;
+</span><span class="boring">  let text = "hello world wonderful world";
+</span><span class="boring">  let mut map: HashMap&lt;&amp;str, i32&gt; = HashMap::new();
+</span><span class="boring">
+</span>  for word in text.split_whitespace() {
+    *map.entry(word).or_insert(0)+=1;
+  }
+<span class="boring">
+</span><span class="boring">    println!("{map:?}");
+</span><span class="boring">}</span></code></pre></pre>
+<p>Now we just need to make some benchmarks and...</p>
+<div style="display: flex; gap: 10px; margin-bottom: 20px;">
+  <div style="display: flex; gap: 10px; width: 100%;">
+    <iframe id="iframe1" src="report_my_code/index.html" width="100%" height="500px" style="border: 1px solid black;"></iframe>
+    <iframe id="iframe2" src="report_original_code/index.html" width="100%" height="500px" style="border: 1px solid black;"></iframe>
+  </div>
+</div>
+<p>It turns out the performance is basically the same in both cases (see the <em>Typical</em> additional <strong>plot</strong> or <em>slope estimate</em>), with this small difference being due to computer noise or variations in other processes running at the same time.
+So, everthing was fine until I moved to the <a href="https://rust-book.cs.brown.edu/ch08-03-hash-maps.html#summary">summary</a>, I've depared with a list of exercises to do, and the first exercise is the following:</p>
+<blockquote>
+<p>Given a list of integers, use a vector and return the median (when sorted, the value in the middle position) and mode (the value that occurs most often; a hash map will be helpful here) of the list.</p>
+</blockquote>
+<p>And how we'll do that? Guess what? Correctly, using one of the two code examples that we've covered so far. Ok, so... let's do some benchmarks for each code example to see what happens. But instead of calculating the median and the mode, we'll only focus on the mode.
+Since both approachs showed similar performance earlier, I don't expect much difference between the way I wrote my code and the way the book's author did.</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">fn main() {
+</span><span class="boring">   use std::collections::HashMap;
+</span><span class="boring">   let numbers: &amp;[i32] = &amp;[1, 2, 3, 4, 5, 6, 7, 8, 9, 12];
+</span><span class="boring">   let mut frequency_map: HashMap&lt;i32, usize&gt; = HashMap::new();
+</span><span class="boring">   let mut max_frequency = 0;
+</span><span class="boring">   let mut mode = numbers[0];
+</span><span class="boring">
+</span>    for &amp;num in numbers {
+        let count = frequency_map.entry(num).or_insert(0);
+        *count += 1;
+
+        if *count &gt; max_frequency {
+            max_frequency += 1;
+            mode = num
+        }
+    }
+<span class="boring">   println!("{frequency_map:?} n {:?}", Some(mode));
+</span><span class="boring">}</span></code></pre></pre>
+<p>Above, maybe that's the way that the author of the book would imagine we would solve this exercise. But as I wanted to prove the efficiency of my code, I did it the following way:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">fn main() {
+</span><span class="boring">   use std::collections::HashMap;
+</span><span class="boring">   let numbers: &amp;[i32] = &amp;[1, 2, 3, 4, 5, 6, 7, 8, 9, 12];
+</span><span class="boring">   let mut frequency_map: HashMap&lt;i32, usize&gt; = HashMap::new();
+</span><span class="boring">   let mut max_frequency = 0;
+</span><span class="boring">   let mut mode = numbers[0];
+</span><span class="boring">
+</span>    for &amp;num in numbers {
+        *frequency_map.entry(num).or_insert(0) += 1;
+
+        if frequency_map[&amp;num] &gt; max_frequency {
+            max_frequency += 1;
+            mode = num
+        }
+    }
+<span class="boring">   println!("{frequency_map:?} n {:?}", Some(mode));
+</span><span class="boring">}</span></code></pre></pre>
+<p>Now, let see the difference in performance with criterion:</p>
+<div style="display: flex; gap: 10px;">
+  <div style="display: flex; gap: 10px; width: 100%;">
+    <iframe id="iframe3" src="report_my_exercise_code/index.html" width="100%" height="500px" style="border: 1px solid black;"></iframe>
+    <iframe id="iframe4" src="report_original_exercise_code/index.html" width="100%" height="500px" style="border: 1px solid black;"></iframe>
+  </div>
+</div>
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+  function syncIframes(iframeA, iframeB) {
+    iframeA.addEventListener("load", () => {
+      const winA = iframeA.contentWindow;
+      const docA = iframeA.contentDocument || winA.document;
+
+      iframeB.addEventListener("load", () => {
+        const winB = iframeB.contentWindow;
+        const docB = iframeB.contentDocument || winB.document;
+
+        // Sincronizar scroll
+        function syncScroll(source, target) {
+          target.scrollTo(source.scrollX, source.scrollY);
+        }
+
+        winA.addEventListener("scroll", () => syncScroll(winA, winB));
+        winB.addEventListener("scroll", () => syncScroll(winB, winA));
+
+        // Sincronizar cliques
+        function syncClick(event, targetWindow) {
+          const clickEvent = new MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            button: event.button,
+          });
+          targetWindow.document.elementFromPoint(event.clientX, event.clientY)?.dispatchEvent(clickEvent);
+        }
+
+        docA.addEventListener("click", (e) => syncClick(e, winB));
+        docB.addEventListener("click", (e) => syncClick(e, winA));
+
+        // Sincronizar atalhos de teclado (Alt + ←)
+        function syncKeydown(event, targetWindow) {
+          if (event.altKey && event.key === "ArrowLeft") {
+            targetWindow.history.back();
+          }
+          if (event.altKey && event.key === "ArrowRight") {
+            targetWindow.history.forward();
+          }
+        }
+
+        docA.addEventListener("keydown", (e) => syncKeydown(e, winB));
+        docB.addEventListener("keydown", (e) => syncKeydown(e, winA));
+      });
+    });
+  }
+
+  const iframe1 = document.getElementById("iframe1");
+  const iframe2 = document.getElementById("iframe2");
+  const iframe3 = document.getElementById("iframe3");
+  const iframe4 = document.getElementById("iframe4");
+
+  if (iframe1 && iframe2) syncIframes(iframe1, iframe2);
+  if (iframe3 && iframe4) syncIframes(iframe3, iframe4);
+});
+</script>
+<p>If we analyze the typical plot in addtional plots, we see that the original code is about 20.53% faster than my code (estimate of 572.41 ns for my code and 455.13 ns for the original code).
+And... why? Before, the difference was less than 5% of difference (measure that is within the noise margin of the computer's processing). Well... the biggest problem here is the number of access to the HashMap! The original code makes <strong>one</strong> access per iteraction to the HashMap, meanwhile, my code makes <strong>two</strong> accesses. HashMaps aren't a simple data structure like arrays or something similar.
+Searching a HashMap requires hash calculations and comparisons to find the correct key, and this has a high cost to CPU. That's the reason for 20% difference between these two ways to solve the exercise.</p>
 
                     </main>
 
@@ -177,22 +325,6 @@
 
         </div>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
 
